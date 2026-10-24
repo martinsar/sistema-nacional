@@ -1,0 +1,673 @@
+{
+  "info": {
+    "name": "Sistema Nacional API",
+    "description": "Colección para probar la API del Sistema Nacional (Grupo 18, RescueSync).\n\nOrden recomendado: ejecutar las carpetas de arriba hacia abajo, o la colección completa con el Collection Runner. El login guarda el token en la variable {{token}} y el resto de los requests lo usan solo.\n\nVariables: baseUrl (URL de la API), username y password (usuario de prueba). Las demás se completan solas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "username",
+      "value": "ayudante"
+    },
+    {
+      "key": "password",
+      "value": "clave-de-prueba-123"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "ongNombre",
+      "value": ""
+    },
+    {
+      "key": "ongId",
+      "value": ""
+    },
+    {
+      "key": "recursoId",
+      "value": ""
+    },
+    {
+      "key": "idConvocatoria",
+      "value": "1"
+    },
+    {
+      "key": "idConvocatoriaRechazada",
+      "value": "2"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Autenticación",
+      "item": [
+        {
+          "name": "Estado de la API",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                ""
+              ]
+            },
+            "description": "Comprueba que la API está levantada. No requiere token."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La API responde', () => pm.response.to.have.status(200));",
+                  "pm.test('Indica que está running', () => pm.expect(pm.response.json().status).to.eql('running'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar usuario",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Crea un usuario. La contraseña debe tener al menos 8 caracteres. Responde 409 si el usuario ya existe (no es un problema, se puede seguir con el login)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Usuario creado (201) o ya existente (409)', () => pm.expect([201, 409]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login (obtener token)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Devuelve un JWT válido por 1 hora. El script guarda el accessToken en la variable {{token}}."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login correcto', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('Devuelve un token Bearer', () => {",
+                  "  pm.expect(body.accessToken).to.be.a('string').and.not.empty;",
+                  "  pm.expect(body.tokenType).to.eql('Bearer');",
+                  "});",
+                  "pm.collectionVariables.set('token', body.accessToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Probar token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/test/protected",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "test",
+                "protected"
+              ]
+            },
+            "description": "Endpoint protegido de prueba. Responde 200 con el usuario del token o 401 si falta o venció."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('El token es válido', () => pm.response.to.have.status(200));",
+                  "pm.test('Devuelve el usuario logueado', () => pm.expect(pm.response.json().username).to.eql(pm.collectionVariables.get('username')));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. ONGs y recursos (datos de prueba)",
+      "item": [
+        {
+          "name": "Crear ONG",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"{{ongNombre}}\",\n  \"tiposRecursos\": [\"Alimentos\", \"Medicamentos\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/ongs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ongs"
+              ]
+            },
+            "description": "Crea una ONG con los tipos de recurso que está habilitada a ofrecer. El nombre se genera solo para que no se repita."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('ongNombre', 'Cáritas ' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('ONG creada (201)', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('ongId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar ONGs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/ongs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "ongs"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Lista de ONGs', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear recurso (100 unidades)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"Alimentos\",\n  \"cantidadTotal\": 100,\n  \"cantidadBloqueada\": 0,\n  \"ongId\": {{ongId}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/recursos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recursos"
+              ]
+            },
+            "description": "Crea un recurso de la ONG con 100 unidades totales y ninguna bloqueada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Recurso creado (201)', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('recursoId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Validación de ofertas",
+      "item": [
+        {
+          "name": "Validar ofertas",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n  {\n    \"organizacion_nombre\": \"{{ongNombre}}\",\n    \"recurso_tipo\": \"Alimentos\",\n    \"recurso_cantidad\": 30\n  },\n  {\n    \"organizacion_nombre\": \"{{ongNombre}}\",\n    \"recurso_tipo\": \"Maquinaria\",\n    \"recurso_cantidad\": 1\n  }\n]"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/validar/recursos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "validar",
+                "recursos"
+              ]
+            },
+            "description": "Recibe una lista de ofertas y completa habilitado_flag en cada una. La ONG se busca por organizacion_nombre: true si el recurso_tipo coincide con alguno de los tipos asociados a la ONG, false si no. La primera oferta queda habilitada y la segunda no."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ofertas = pm.response.json();",
+                  "pm.test('Devuelve una oferta por cada una enviada', () => pm.expect(ofertas).to.have.lengthOf(2));",
+                  "pm.test('Alimentos: habilitada', () => pm.expect(ofertas[0].habilitado_flag).to.eql(true));",
+                  "pm.test('Maquinaria: no habilitada', () => pm.expect(ofertas[1].habilitado_flag).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. Compromiso y liberación",
+      "item": [
+        {
+          "name": "Comprometer recursos (30 de 100)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo_recurso\": \"Alimentos\",\n  \"nombre_ong\": \"{{ongNombre}}\",\n  \"cantidad\": 30,\n  \"id_convocatoria\": {{idConvocatoria}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/validar/coincidencias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "validar",
+                "coincidencias"
+              ]
+            },
+            "description": "Compromete 30 unidades de Alimentos de la ONG para la convocatoria. Se compromete todo lo pedido o nada. Bloquea los recursos coincidentes (bloqueo pesimista) y registra una adjudicación por cada recurso afectado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Compromiso correcto (200)', () => pm.response.to.have.status(200));",
+                  "pm.test('Se comprometieron las 30 unidades', () => pm.expect(body.cantidadComprometida).to.eql(30));",
+                  "pm.test('Quedan 30 unidades bloqueadas', () => pm.expect(body.recursosCoincidentes[0].cantidadBloqueada).to.eql(30));",
+                  "pm.test('Quedan 70 unidades disponibles', () => pm.expect(body.recursosCoincidentes[0].cantidadDisponible).to.eql(70));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprometer más de lo disponible (error 409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo_recurso\": \"Alimentos\",\n  \"nombre_ong\": \"{{ongNombre}}\",\n  \"cantidad\": 500,\n  \"id_convocatoria\": {{idConvocatoriaRechazada}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/validar/coincidencias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "validar",
+                "coincidencias"
+              ]
+            },
+            "description": "Pide 500 unidades cuando solo hay 70 disponibles. El compromiso es todo o nada: la API rechaza el pedido con 409 y un mensaje, y no bloquea ninguna unidad."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Rechazado con 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Devuelve código y mensaje', () => {",
+                  "  pm.expect(body.codigo).to.eql(409);",
+                  "  pm.expect(body.mensaje).to.include('No se comprometió ninguna unidad');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Comprometer sin id_convocatoria (error 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo_recurso\": \"Alimentos\",\n  \"nombre_ong\": \"{{ongNombre}}\",\n  \"cantidad\": 10\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/validar/coincidencias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "validar",
+                "coincidencias"
+              ]
+            },
+            "description": "El id de la convocatoria es obligatorio: sin él no se podría liberar después. Responde 400."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Rechazado con 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Devuelve código y mensaje', () => {",
+                  "  pm.expect(pm.response.json().codigo).to.eql(400);",
+                  "  pm.expect(pm.response.json().mensaje).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Liberar convocatoria (30 unidades)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_convocatoria\": {{idConvocatoria}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/validar/liberar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "validar",
+                "liberar"
+              ]
+            },
+            "description": "Libera todo lo que se adjudicó a la convocatoria. Solo hace falta el id: el servicio busca las adjudicaciones pendientes y devuelve cada cantidad al recurso."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('Liberación correcta (200)', () => pm.response.to.have.status(200));",
+                  "pm.test('Mensaje de éxito', () => pm.expect(body.mensaje).to.eql('Recursos liberados exitosamente'));",
+                  "pm.test('Se liberaron 30 unidades', () => pm.expect(body.cantidadTotalLiberada).to.eql(30));",
+                  "pm.test('No queda nada bloqueado', () => pm.expect(body.recursosLiberados[0].cantidadBloqueada).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Liberar de nuevo (error 404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_convocatoria\": {{idConvocatoria}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/validar/liberar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "validar",
+                "liberar"
+              ]
+            },
+            "description": "Una convocatoria ya liberada no tiene adjudicaciones pendientes: responde 404 y no devuelve unidades dos veces."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Segunda liberación rechazada con 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Devuelve código y mensaje', () => pm.expect(pm.response.json().codigo).to.eql(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Liberar la convocatoria rechazada (error 404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id_convocatoria\": {{idConvocatoriaRechazada}}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/validar/liberar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "validar",
+                "liberar"
+              ]
+            },
+            "description": "El compromiso rechazado no dejó adjudicaciones, así que no hay nada que liberar: responde 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Nada que liberar (404)', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar recurso (todo liberado)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/recursos/{{recursoId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recursos",
+                "{{recursoId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const recurso = pm.response.json();",
+                  "pm.test('Total intacto', () => pm.expect(recurso.cantidadTotal).to.eql(100));",
+                  "pm.test('Nada bloqueado', () => pm.expect(recurso.cantidadBloqueada).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

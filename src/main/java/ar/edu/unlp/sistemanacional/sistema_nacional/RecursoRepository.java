@@ -1,5 +1,6 @@
 package ar.edu.unlp.sistemanacional.sistema_nacional;
 
+import java.util.Collection;
 import java.util.List;
 
 import jakarta.persistence.LockModeType;
@@ -11,4 +12,7 @@ public interface RecursoRepository extends JpaRepository<Recurso, Long> {
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	List<Recurso> findByTipoIgnoreCaseAndOng_NombreIgnoreCaseOrderByIdAsc(String tipo, String nombre);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	List<Recurso> findAllByIdInOrderByIdAsc(Collection<Long> ids);
 }
