@@ -13,9 +13,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class ValidarRecursosController {
 
     private final ValidarRecursosService validarRecursoService;
+    private final DescontarRecursosService descontarRecursosService;
 
-    public ValidarRecursosController(ValidarRecursosService validarRecursosService) {
+    public ValidarRecursosController(
+            ValidarRecursosService validarRecursosService,
+            DescontarRecursosService descontarRecursosService) {
         this.validarRecursoService = validarRecursosService;
+        this.descontarRecursosService = descontarRecursosService;
     }
 
     @PostMapping("/recursos")
@@ -26,6 +30,10 @@ public class ValidarRecursosController {
         return ResponseEntity.ok(resultados);
     }
 
-
+    @PostMapping("/coincidencias")
+    public ResponseEntity<DescontarRecursosService.DescuentoResponse> descontarRecursos(
+            @RequestBody DescontarRecursosService.SolicitudDescuento solicitud) {
+        return ResponseEntity.ok(descontarRecursosService.descontar(solicitud));
+    }
 
 }

@@ -27,6 +27,49 @@ class OngRecursoServiceTests {
     @Autowired
     private RecursoService recursoService;
 
+    @Autowired
+    private DescontarRecursosService descontarRecursosService;
+
+    @Test
+    void deductsRequestedQuantityFromMatchingDatabaseResourcesInOrder() {
+        String ongNombre = "ONG " + UUID.randomUUID();
+        var ong = ongService.create(new OngService.OngRequest(ongNombre, List.of("Alimentos")));
+        var primera = recursoService.create(new RecursoService.RecursoRequest("Alimentos", 5, 0, ong.id()));
+        var segunda = recursoService.create(new RecursoService.RecursoRequest("Alimentos", 5, 0, ong.id()));
+        recursoService.create(new RecursoService.RecursoRequest("Medicamentos", 8, 0, ong.id()));
+        ongService.create(new OngService.OngRequest("Otra ONG " + UUID.randomUUID(), List.of("Alimentos")));
+
+        var resultado = descontarRecursosService.descontar(
+                new DescontarRecursosService.SolicitudDescuento("Alimentos", ongNombre, 6));
+
+        assertEquals(0, resultado.cantidadRestante());
+        assertEquals(List.of(5, 5), resultado.recursosCoincidentes().stream()
+                .map(DescontarRecursosService.RecursoDescontado::cantidadTotal).toList());
+        assertEquals(List.of(5, 1), resultado.recursosCoincidentes().stream()
+                .map(DescontarRecursosService.RecursoDescontado::cantidadBloqueada).toList());
+        assertEquals(List.of(0, 4), resultado.recursosCoincidentes().stream()
+                .map(DescontarRecursosService.RecursoDescontado::cantidadDisponible).toList());
+        assertEquals(5, recursoService.findById(primera.id()).cantidadTotal());
+        assertEquals(5, recursoService.findById(segunda.id()).cantidadTotal());
+        assertEquals(5, recursoService.findById(primera.id()).cantidadBloqueada());
+        assertEquals(1, recursoService.findById(segunda.id()).cantidadBloqueada());
+    }
+
+    @Test
+    void onlyBlocksAvailableResourcesAndReturnsUnfulfilledAmount() {
+        String ongNombre = "ONG " + UUID.randomUUID();
+        var ong = ongService.create(new OngService.OngRequest(ongNombre, List.of("Alimentos")));
+        recursoService.create(new RecursoService.RecursoRequest("Alimentos", 5, 3, ong.id()));
+
+        var resultado = descontarRecursosService.descontar(
+                new DescontarRecursosService.SolicitudDescuento("Alimentos", ongNombre, 4));
+
+        assertEquals(2, resultado.cantidadRestante());
+        assertEquals(5, resultado.recursosCoincidentes().get(0).cantidadTotal());
+        assertEquals(5, resultado.recursosCoincidentes().get(0).cantidadBloqueada());
+        assertEquals(0, resultado.recursosCoincidentes().get(0).cantidadDisponible());
+    }
+
     @Test
     void createsReadsUpdatesAndDeletesOngsAndResources() {
         String suffix = UUID.randomUUID().toString();
