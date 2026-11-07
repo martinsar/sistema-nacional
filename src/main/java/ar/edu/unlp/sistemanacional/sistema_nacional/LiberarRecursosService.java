@@ -70,7 +70,8 @@ public class LiberarRecursosService {
                     adjudicacion.getCantidad(),
                     recurso.getCantidadBloqueada(),
                     recurso.getCantidadTotal() - recurso.getCantidadBloqueada(),
-                    adjudicacion.getOng().getId()));
+                    adjudicacion.getOng().getId(),
+                    adjudicacion.getOng().getCodigoOng()));
         }
 
         return new LiberacionResponse(solicitud.idConvocatoria(), hayOmitidos ? MENSAJE_CON_OMITIDOS : MENSAJE_OK,
@@ -94,6 +95,7 @@ public class LiberarRecursosService {
             Integer cantidadLiberada,
             Integer cantidadBloqueada,
             Integer cantidadDisponible,
-            Long ongId) {
+            Long ongId,
+            @JsonProperty("codigo_ong") String codigoOng) {
     }
 }

@@ -17,26 +17,27 @@ public class ValidarRecursosService {
 
     public List<Oferta> validarOfertas(List<Oferta> ofertasRecibidas) {
         return ofertasRecibidas.stream().map(oferta -> {
-            
             boolean habilitado = false;
+            Optional<Ong> ongO = buscarOng(oferta);
 
-            if (oferta.getOrganizacion_nombre() != null) {
-                Optional<Ong> ongO = ongRepository.findByNombre(oferta.getOrganizacion_nombre().trim());
-
-                if (ongO.isPresent()) {
-                    Ong ong = ongO.get();
-                    
-                    List<String> tiposDisponibles = ong.getTipo();
-                    
-                    if (tiposDisponibles != null && oferta.getRecurso_tipo() != null) {
-                        habilitado = tiposDisponibles.stream()
-                            .anyMatch(tipo -> tipo.trim().equalsIgnoreCase(oferta.getRecurso_tipo().trim()));
-                    }
-                }
+            if (ongO.isPresent() && oferta.getRecurso_tipo() != null) {
+                List<String> tiposDisponibles = ongO.get().getTipo();
+                habilitado = tiposDisponibles != null && tiposDisponibles.stream()
+                        .anyMatch(tipo -> tipo.trim().equalsIgnoreCase(oferta.getRecurso_tipo().trim()));
             }
-            oferta.setHabilitado_flag(habilitado);
 
+            oferta.setHabilitado_flag(habilitado);
             return oferta;
         }).toList();
+    }
+
+    private Optional<Ong> buscarOng(Oferta oferta) {
+        if (oferta.getCodigo_ong() != null && !oferta.getCodigo_ong().isBlank()) {
+            return ongRepository.findByCodigoOng(oferta.getCodigo_ong().trim());
+        }
+        if (oferta.getOrganizacion_nombre() != null && !oferta.getOrganizacion_nombre().isBlank()) {
+            return ongRepository.findByNombre(oferta.getOrganizacion_nombre().trim());
+        }
+        return Optional.empty();
     }
 }

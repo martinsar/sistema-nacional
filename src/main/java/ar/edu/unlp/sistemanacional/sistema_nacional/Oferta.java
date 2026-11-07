@@ -1,7 +1,10 @@
 package ar.edu.unlp.sistemanacional.sistema_nacional;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 public class Oferta {
 
+    private String codigo_ong;
     private String organizacion_nombre;
     private String recurso_tipo;
     private Integer recurso_cantidad;
@@ -18,6 +21,16 @@ public class Oferta {
         this.habilitado_flag = habilitado_flag;
     }
 
+    @Schema(description = "Código estable de la ONG compartido entre sistemas. Se prioriza sobre organizacion_nombre.")
+    public String getCodigo_ong() {
+        return codigo_ong;
+    }
+
+    public void setCodigo_ong(String codigo_ong) {
+        this.codigo_ong = codigo_ong;
+    }
+
+    @Schema(description = "Campo legado; usar codigo_ong para identificar la ONG entre sistemas.", deprecated = true)
     public String getOrganizacion_nombre() {
         return organizacion_nombre;
     }

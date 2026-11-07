@@ -21,6 +21,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
@@ -36,12 +42,27 @@ public class AuthController {
 	}
 
 	@PostMapping("/register")
+	@Operation(summary = "Registrar usuario", description = "No requiere token. Envía un JSON con username y password (mínimo 8 caracteres), por ejemplo {\"username\":\"ayudante\",\"password\":\"clave-segura-123\"}. Registra el usuario para que luego pueda iniciar sesión en /api/auth/login.")
+	@ApiResponses({
+			@ApiResponse(responseCode = "201", description = "Usuario registrado.",
+					content = @Content(schema = @Schema(implementation = UserResponse.class))),
+			@ApiResponse(responseCode = "400", description = "El nombre de usuario o la contraseña no cumplen los requisitos.",
+					content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
+			@ApiResponse(responseCode = "409", description = "Ya existe un usuario con ese nombre.",
+					content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class)))
+	})
 	public ResponseEntity<UserResponse> register(@RequestBody RegisterRequest request) {
 		authService.register(request.username(), request.password());
 		return ResponseEntity.status(HttpStatus.CREATED).body(new UserResponse(request.username().trim()));
 	}
 
 	@PostMapping("/login")
+	@Operation(summary = "Iniciar sesión", description = "No requiere token. El cuerpo debe incluir username y password. Ejemplo: {\"username\":\"ayudante\",\"password\":\"clave-segura-123\"}. La respuesta contiene accessToken, que debe enviarse en las solicitudes protegidas como Authorization: Bearer <accessToken> o configurarse mediante el botón Authorize de Swagger. El token vence en una hora.")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "Autenticación exitosa.",
+					content = @Content(schema = @Schema(implementation = TokenResponse.class))),
+			@ApiResponse(responseCode = "401", description = "Credenciales incorrectas o incompletas.")
+	})
 	public TokenResponse login(@RequestBody LoginRequest request) {
 		if (request.username() == null || request.password() == null) {
 			throw new BadCredentialsException("Username and password are required");

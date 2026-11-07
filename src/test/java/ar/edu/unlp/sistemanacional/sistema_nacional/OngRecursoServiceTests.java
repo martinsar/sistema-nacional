@@ -1,6 +1,7 @@
 package ar.edu.unlp.sistemanacional.sistema_nacional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -297,6 +298,59 @@ class OngRecursoServiceTests {
                 resultado.stream().map(Oferta::getHabilitado_flag).toList());
     }
 
+    @Test
+    void usesStableOngCodeForIntegrationAcrossOffersResourcesAndCommitments() {
+        String ongNombre = "ONG " + UUID.randomUUID();
+        var ong = ongService.create(new OngService.OngRequest(ongNombre, List.of("Alimentos")));
+        assertTrue(ong.codigoOng().startsWith("ONG-"));
+        var otraOng = ongService.create(
+                new OngService.OngRequest("Otra ONG " + UUID.randomUUID(), List.of("Alimentos")));
+        assertNotEquals(ong.codigoOng(), otraOng.codigoOng());
+
+        var recurso = recursoService.create(
+                new RecursoService.RecursoRequest("Alimentos", 10, 0, ong.codigoOng(), null));
+        assertEquals(ong.codigoOng(), recurso.codigoOng());
+
+        Oferta ofertaPorCodigo = new Oferta("Nombre anterior", "Alimentos", 4, null);
+        ofertaPorCodigo.setCodigo_ong(ong.codigoOng());
+        var resultado = validarRecursosService.validarOfertas(List.of(ofertaPorCodigo));
+        assertTrue(resultado.get(0).getHabilitado_flag());
+
+        var compromiso = descontarRecursosService.descontar(
+                new DescontarRecursosService.SolicitudDescuento(
+                        "Alimentos", ong.codigoOng(), null, 4, SIGUIENTE_CONVOCATORIA.incrementAndGet()));
+        assertEquals(4, compromiso.cantidadComprometida());
+        assertEquals(ong.codigoOng(), compromiso.recursosCoincidentes().get(0).codigoOng());
+
+        var ongActualizada = ongService.update(ong.id(),
+                new OngService.OngRequest("Nombre actualizado " + UUID.randomUUID(), List.of("Alimentos")));
+        assertEquals(ong.codigoOng(), ongActualizada.codigoOng());
+    }
+
+    @Test
+    void acceptsAnExistingSharedCodeAndPreventsChangingOrReusingIt() {
+        String codigoCompartido = "APP-ONG-" + UUID.randomUUID();
+        var ong = ongService.create(
+                new OngService.OngRequest("ONG con código compartido", List.of("Alimentos"), codigoCompartido));
+        assertEquals(codigoCompartido, ong.codigoOng());
+        assertEquals(ong.id(), ongService.findByCodigoOng(codigoCompartido).id());
+        var actualizadaPorCodigo = ongService.updateByCodigoOng(codigoCompartido,
+                new OngService.OngRequest("ONG actualizada por código", List.of("Alimentos")));
+        assertEquals(ong.id(), actualizadaPorCodigo.id());
+        assertEquals(codigoCompartido, actualizadaPorCodigo.codigoOng());
+
+        var duplicada = assertThrows(ResponseStatusException.class,
+                () -> ongService.create(new OngService.OngRequest(
+                        "Otra ONG", List.of("Alimentos"), codigoCompartido)));
+        assertEquals(HttpStatus.CONFLICT, duplicada.getStatusCode());
+
+        var cambioCodigo = assertThrows(ResponseStatusException.class,
+                () -> ongService.update(ong.id(), new OngService.OngRequest(
+                        "ONG renombrada", List.of("Alimentos"), "OTRO-CODIGO")));
+        assertEquals(HttpStatus.BAD_REQUEST, cambioCodigo.getStatusCode());
+        assertEquals(codigoCompartido, ongService.findById(ong.id()).codigoOng());
+    }
+
     // ---------- ABM ----------
 
     @Test
@@ -323,7 +377,7 @@ class OngRecursoServiceTests {
         assertEquals(updatedOng.id(), ongService.findById(ong.id()).id());
 
         recursoService.delete(recurso.id());
-        ongService.delete(ong.id());
+        ongService.deleteByCodigoOng(ong.codigoOng());
         assertEquals(HttpStatus.NOT_FOUND,
                 assertThrows(ResponseStatusException.class, () -> ongService.findById(ong.id())).getStatusCode());
     }
@@ -335,5 +389,20 @@ class OngRecursoServiceTests {
                 () -> recursoService.create(new RecursoService.RecursoRequest("Alimentos", 2, 3, ong.id())));
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());
         ongService.delete(ong.id());
+    }
+
+    @Test
+    void preventsDeletingResourcesWithReleasedAdjudications() {
+        long convocatoria = SIGUIENTE_CONVOCATORIA.incrementAndGet();
+        String ongNombre = "ONG " + UUID.randomUUID();
+        var ong = ongService.create(new OngService.OngRequest(ongNombre, List.of("Alimentos")));
+        var recurso = recursoService.create(new RecursoService.RecursoRequest("Alimentos", 5, 0, ong.id()));
+        descontarRecursosService.descontar(solicitud(ongNombre, 2, convocatoria));
+        liberarRecursosService.liberar(new LiberarRecursosService.SolicitudLiberacion(convocatoria));
+
+        var error = assertThrows(ResponseStatusException.class, () -> recursoService.delete(recurso.id()));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertEquals(recurso.id(), recursoService.findById(recurso.id()).id());
     }
 }

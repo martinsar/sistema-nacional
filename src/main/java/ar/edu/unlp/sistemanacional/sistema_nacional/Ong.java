@@ -13,15 +13,20 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "ongs")
+@Table(name = "ongs", uniqueConstraints = @UniqueConstraint(name = "uk_ongs_codigo_ong", columnNames = "codigo_ong"))
 public class Ong {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "codigo_ong", length = 100)
+    private String codigoOng;
 
     @Column(nullable = false, length = 150)
     private String nombre;
@@ -38,12 +43,28 @@ public class Ong {
     }
 
     public Ong(String nombre, List<String> tipos) {
+        this(null, nombre, tipos);
+    }
+
+    public Ong(String codigoOng, String nombre, List<String> tipos) {
+        this.codigoOng = codigoOng;
         this.nombre = nombre;
         this.tiposRecursos = tipos != null ? tipos : new ArrayList<>(); 
     }
 
+    @PrePersist
+    void generarCodigoOngSiFalta() {
+        if (codigoOng == null || codigoOng.isBlank()) {
+            codigoOng = "ONG-" + java.util.UUID.randomUUID();
+        }
+    }
+
     public Long getId() {
         return id;
+    }
+
+    public String getCodigoOng() {
+        return codigoOng;
     }
 
     public String getNombre() {

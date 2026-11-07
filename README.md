@@ -69,21 +69,31 @@ Cuando un servicio rechaza un pedido, responde con el código HTTP y un cuerpo c
 
 ### ONGs
 
-Cada ONG tiene un nombre y la lista de **tipos de recurso** que está habilitada a ofrecer.
+Cada ONG tiene un nombre, la lista de **tipos de recurso** que está habilitada a ofrecer y un `codigo_ong` único y estable. El `id` sigue siendo una clave interna de esta base; para referenciar una ONG entre la app local y el Sistema Nacional se debe usar `codigo_ong`. Si la app local ya asignó el código, puede enviarlo al crear la ONG en el Sistema Nacional; si no, el Sistema Nacional genera uno. El código se devuelve al crear o consultar la ONG y no cambia al modificar su nombre.
 
 | Método | Ruta | Descripción |
 |---|---|---|
 | GET | `/api/ongs` | Lista las ONGs |
-| GET | `/api/ongs/{id}` | Devuelve una ONG (404 si no existe) |
+| GET | `/api/ongs/codigo/{codigo_ong}` | Devuelve una ONG usando el código estable compartido (recomendado entre sistemas) |
+| GET | `/api/ongs/{id}` | Devuelve una ONG por su ID numérico interno (ruta heredada; no usar para integración entre sistemas) |
 | POST | `/api/ongs` | Crea una ONG (201) |
-| PUT | `/api/ongs/{id}` | Modifica nombre y tipos |
-| DELETE | `/api/ongs/{id}` | Elimina la ONG (409 si tiene recursos) |
+| PUT | `/api/ongs/codigo/{codigo_ong}` | Modifica nombre y tipos usando el código estable |
+| DELETE | `/api/ongs/codigo/{codigo_ong}` | Elimina usando el código estable (409 si tiene recursos) |
+| PUT / DELETE | `/api/ongs/{id}` | Rutas heredadas por ID numérico interno; el ID no se comparte entre sistemas |
 
 ```json
 { "nombre": "Cáritas", "tiposRecursos": ["Alimentos", "Medicamentos"] }
 ```
 
 El nombre es obligatorio (hasta 150 caracteres) y debe haber al menos un tipo de recurso; si no, responde 400.
+También se puede incluir `codigo_ong` en el pedido si la app local ya asignó el identificador compartido. El código es único y no se puede cambiar al actualizar la ONG. Las ONGs existentes reciben un código al iniciar la aplicación.
+
+La respuesta incluye el identificador compartido, por ejemplo:
+
+```json
+{ "id": 1, "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000", "nombre": "Cáritas",
+  "tiposRecursos": ["Alimentos", "Medicamentos"] }
+```
 
 ### Recursos
 
@@ -95,26 +105,27 @@ Un recurso es un stock de un tipo que pertenece a una ONG. La cantidad **disponi
 | GET | `/api/recursos/{id}` | Devuelve un recurso |
 | POST | `/api/recursos` | Crea un recurso (201) |
 | PUT | `/api/recursos/{id}` | Modifica un recurso |
-| DELETE | `/api/recursos/{id}` | Elimina un recurso |
+| DELETE | `/api/recursos/{id}` | Elimina un recurso (409 si tiene adjudicaciones registradas) |
 
 ```json
-{ "tipo": "Alimentos", "cantidadTotal": 100, "cantidadBloqueada": 0, "ongId": 1 }
+{ "id": 8, "tipo": "Alimentos", "cantidadTotal": 100, "cantidadBloqueada": 0,
+  "ongId": 1, "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000" }
 ```
 
-Responde 400 si faltan datos o si `cantidadBloqueada` es mayor que `cantidadTotal`, y 404 si la ONG no existe.
+Se recomienda enviar `codigo_ong` al asociar un recurso a una ONG entre sistemas. `ongId` continúa aceptándose por compatibilidad para clientes que operan dentro de la base del Sistema Nacional. La respuesta incluye ambos identificadores. Responde 400 si faltan datos o si `cantidadBloqueada` es mayor que `cantidadTotal`, y 404 si la ONG no existe.
 
 ### Validar ofertas
 
-`POST /api/validar/recursos`
+`POST /api/ofertas/validar` (alias: `/api/validar/recursos`)
 
-Recibe una lista de ofertas y completa `habilitado_flag` en cada una. La ONG se busca **por nombre** (`organizacion_nombre`). La oferta queda habilitada (`true`) si el `recurso_tipo` coincide, sin importar mayúsculas, con alguno de los tipos asociados a la ONG; si la ONG no existe o el tipo no coincide, queda en `false`.
+Recibe una lista de ofertas y completa `habilitado_flag` en cada una. La app debe identificar la ONG con `codigo_ong`, que permanece igual en ambos sistemas aunque sus IDs locales sean distintos. `organizacion_nombre` se acepta temporalmente para compatibilidad con clientes anteriores, pero se recomienda migrar al código. La oferta queda habilitada (`true`) si el `recurso_tipo` coincide, sin importar mayúsculas, con alguno de los tipos asociados a la ONG; si la ONG no existe o el tipo no coincide, queda en `false`.
 
 Pedido:
 
 ```json
 [
-  { "organizacion_nombre": "Cáritas", "recurso_tipo": "Alimentos", "recurso_cantidad": 30 },
-  { "organizacion_nombre": "Cáritas", "recurso_tipo": "Maquinaria", "recurso_cantidad": 1 }
+  { "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000", "recurso_tipo": "Alimentos", "recurso_cantidad": 30 },
+  { "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000", "recurso_tipo": "Maquinaria", "recurso_cantidad": 1 }
 ]
 ```
 
@@ -122,18 +133,18 @@ Respuesta `200` (la misma lista con el resultado):
 
 ```json
 [
-  { "organizacion_nombre": "Cáritas", "recurso_tipo": "Alimentos", "recurso_cantidad": 30, "habilitado_flag": true },
-  { "organizacion_nombre": "Cáritas", "recurso_tipo": "Maquinaria", "recurso_cantidad": 1, "habilitado_flag": false }
+  { "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000", "recurso_tipo": "Alimentos", "recurso_cantidad": 30, "habilitado_flag": true },
+  { "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000", "recurso_tipo": "Maquinaria", "recurso_cantidad": 1, "habilitado_flag": false }
 ]
 ```
 
 ### Comprometer recursos
 
-`POST /api/validar/coincidencias`
+`POST /api/recursos/comprometer` (alias: `/api/validar/coincidencias`)
 
 Compromete una cantidad de recursos de una ONG para una convocatoria. **Se compromete todo lo pedido o nada**: nunca quedan recursos comprometidos a medias.
 
-1. Busca todos los recursos de la ONG con ese tipo (sin distinguir mayúsculas), ordenados por id.
+1. Busca todos los recursos de la ONG identificada por `codigo_ong` con ese tipo (sin distinguir mayúsculas), ordenados por id.
 2. Los **bloquea en la base** (bloqueo pesimista, `SELECT ... FOR UPDATE`), de modo que dos pedidos simultáneos no pueden comprometer la misma unidad.
 3. Verifica que la suma de lo disponible alcance. Si no alcanza, rechaza el pedido sin modificar nada.
 4. Reparte la cantidad entre los recursos, tomando de cada uno lo que tenga disponible, y la suma a `cantidadBloqueada`.
@@ -142,8 +153,10 @@ Compromete una cantidad de recursos de una ONG para una convocatoria. **Se compr
 Pedido:
 
 ```json
-{ "tipo_recurso": "Alimentos", "nombre_ong": "Cáritas", "cantidad": 30, "id_convocatoria": 5 }
+{ "tipo_recurso": "Alimentos", "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000", "cantidad": 30, "id_convocatoria": 5 }
 ```
+
+`nombre_ong` se acepta temporalmente por compatibilidad; los clientes nuevos deben enviar `codigo_ong`.
 
 Respuesta `200`:
 
@@ -154,7 +167,7 @@ Respuesta `200`:
   "mensaje": "Recursos comprometidos exitosamente",
   "recursosCoincidentes": [
     { "id": 1, "tipo": "Alimentos", "cantidadTotal": 100, "cantidadBloqueada": 30,
-      "cantidadDisponible": 70, "ongId": 1 }
+      "cantidadDisponible": 70, "ongId": 1, "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000" }
   ]
 }
 ```
@@ -162,13 +175,13 @@ Respuesta `200`:
 | Código | Cuándo |
 |---|---|
 | 200 | Se comprometió la cantidad completa |
-| 400 | Falta `tipo_recurso`, `nombre_ong`, `id_convocatoria` o `cantidad`, o la cantidad no es mayor a cero |
+| 400 | Falta `tipo_recurso`, `codigo_ong` (o `nombre_ong` legado), `id_convocatoria` o `cantidad`, o la cantidad no es mayor a cero |
 | 404 | La ONG no existe o no tiene recursos de ese tipo |
 | 409 | No hay disponibilidad suficiente: no se comprometió ninguna unidad |
 
 ### Liberar recursos
 
-`POST /api/validar/liberar`
+`POST /api/convocatorias/{id}/recursos/liberar` (alias: `/api/validar/liberar`)
 
 Libera todo lo que se comprometió para una convocatoria. Solo hace falta enviar su id: el servicio busca las adjudicaciones pendientes, bloquea los recursos involucrados y devuelve a cada uno la cantidad que se le había bloqueado. Cada adjudicación se libera una sola vez.
 
@@ -190,7 +203,7 @@ Respuesta `200`:
   "cantidadTotalLiberada": 30,
   "recursosLiberados": [
     { "recursoId": 1, "tipo": "Alimentos", "cantidadLiberada": 30, "cantidadBloqueada": 0,
-      "cantidadDisponible": 100, "ongId": 1 }
+      "cantidadDisponible": 100, "ongId": 1, "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000" }
   ]
 }
 ```
@@ -206,9 +219,9 @@ Cuando hay recursos que no se pudieron liberar, el mensaje es: `Recursos liberad
 ## 4. Flujo típico
 
 1. Login y obtención del token.
-2. `POST /api/validar/recursos` con las ofertas recibidas: se descartan las que vuelven con `habilitado_flag: false`.
-3. `POST /api/validar/coincidencias` por cada oferta aceptada, con el `id_convocatoria`: si responde 200 quedó todo comprometido; si responde 409 no se comprometió nada.
-4. Al terminar o cancelar la convocatoria, `POST /api/validar/liberar` con su `id_convocatoria`.
+2. `POST /api/ofertas/validar` con las ofertas recibidas: se descartan las que vuelven con `habilitado_flag: false`.
+3. `POST /api/recursos/comprometer` por cada oferta aceptada, con el `id_convocatoria`: si responde 200 quedó todo comprometido; si responde 409 no se comprometió nada.
+4. Al terminar o cancelar la convocatoria, `POST /api/convocatorias/{id}/recursos/liberar` con su `id_convocatoria`.
 
 ## 5. Cómo levantarla
 
@@ -239,21 +252,21 @@ Antes de probar el compromiso y la liberación hace falta tener cargado un usuar
    { "nombre": "Cáritas", "tiposRecursos": ["Alimentos", "Medicamentos"] }
    ```
 
-   Anotar el `id` que devuelve (en los ejemplos, `1`).
-3. **Crear los recursos** de esa ONG, con `ongId` igual al `id` anterior:
+   Anotar el `codigo_ong` que devuelve; ese es el identificador que se comparte con la app local. El `id` solo se usa internamente en esta base.
+3. **Crear los recursos** de esa ONG, enviando `codigo_ong`:
 
    ```http
    POST /api/recursos
    Authorization: Bearer <token>
 
-   { "tipo": "Alimentos", "cantidadTotal": 100, "cantidadBloqueada": 0, "ongId": 1 }
+   { "tipo": "Alimentos", "cantidadTotal": 100, "cantidadBloqueada": 0, "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000" }
    ```
 
    ```http
    POST /api/recursos
    Authorization: Bearer <token>
 
-   { "tipo": "Medicamentos", "cantidadTotal": 50, "cantidadBloqueada": 0, "ongId": 1 }
+   { "tipo": "Medicamentos", "cantidadTotal": 50, "cantidadBloqueada": 0, "codigo_ong": "ONG-550e8400-e29b-41d4-a716-446655440000" }
    ```
 4. **Verificar** el stock inicial con `GET /api/recursos`: cada recurso debe mostrar `cantidadBloqueada: 0`.
 

@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AdjudicacionRepository extends JpaRepository<Adjudicacion, Long> {
 
+	boolean existsByRecursoId(Long recursoId);
+
 	List<Adjudicacion> findByConvocatoriaIdAndLiberadaFalseOrderByIdAsc(Long convocatoriaId);
 
 	List<Adjudicacion> findByConvocatoriaIdOrderByIdAsc(Long convocatoriaId);

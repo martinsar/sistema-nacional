@@ -36,7 +36,7 @@
       "value": ""
     },
     {
-      "key": "ongId",
+      "key": "ongCodigo",
       "value": ""
     },
     {
@@ -238,7 +238,7 @@
                 "ongs"
               ]
             },
-            "description": "Crea una ONG con los tipos de recurso que está habilitada a ofrecer. El nombre se genera solo para que no se repita."
+            "description": "Crea una ONG con los tipos de recurso que está habilitada a ofrecer. El servicio genera un codigo_ong estable, que luego se comparte en los requests de integración."
           },
           "event": [
             {
@@ -256,7 +256,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('ONG creada (201)', () => pm.response.to.have.status(201));",
-                  "pm.collectionVariables.set('ongId', pm.response.json().id);"
+                  "pm.collectionVariables.set('ongCodigo', pm.response.json().codigo_ong);"
                 ]
               }
             }
@@ -305,7 +305,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tipo\": \"Alimentos\",\n  \"cantidadTotal\": 100,\n  \"cantidadBloqueada\": 0,\n  \"ongId\": {{ongId}}\n}"
+              "raw": "{\n  \"tipo\": \"Alimentos\",\n  \"cantidadTotal\": 100,\n  \"cantidadBloqueada\": 0,\n  \"codigo_ong\": \"{{ongCodigo}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/api/recursos",
@@ -349,20 +349,20 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "[\n  {\n    \"organizacion_nombre\": \"{{ongNombre}}\",\n    \"recurso_tipo\": \"Alimentos\",\n    \"recurso_cantidad\": 30\n  },\n  {\n    \"organizacion_nombre\": \"{{ongNombre}}\",\n    \"recurso_tipo\": \"Maquinaria\",\n    \"recurso_cantidad\": 1\n  }\n]"
+              "raw": "[\n  {\n    \"codigo_ong\": \"{{ongCodigo}}\",\n    \"recurso_tipo\": \"Alimentos\",\n    \"recurso_cantidad\": 30\n  },\n  {\n    \"codigo_ong\": \"{{ongCodigo}}\",\n    \"recurso_tipo\": \"Maquinaria\",\n    \"recurso_cantidad\": 1\n  }\n]"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/validar/recursos",
+              "raw": "{{baseUrl}}/api/ofertas/validar",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "validar",
-                "recursos"
+                "ofertas",
+                "validar"
               ]
             },
-            "description": "Recibe una lista de ofertas y completa habilitado_flag en cada una. La ONG se busca por organizacion_nombre: true si el recurso_tipo coincide con alguno de los tipos asociados a la ONG, false si no. La primera oferta queda habilitada y la segunda no."
+            "description": "Recibe una lista de ofertas y completa habilitado_flag en cada una. La ONG se busca por codigo_ong, una clave estable compartida entre sistemas. La primera oferta queda habilitada y la segunda no."
           },
           "event": [
             {
@@ -396,17 +396,17 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tipo_recurso\": \"Alimentos\",\n  \"nombre_ong\": \"{{ongNombre}}\",\n  \"cantidad\": 30,\n  \"id_convocatoria\": {{idConvocatoria}}\n}"
+              "raw": "{\n  \"tipo_recurso\": \"Alimentos\",\n  \"codigo_ong\": \"{{ongCodigo}}\",\n  \"cantidad\": 30,\n  \"id_convocatoria\": {{idConvocatoria}}\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/validar/coincidencias",
+              "raw": "{{baseUrl}}/api/recursos/comprometer",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "validar",
-                "coincidencias"
+                "recursos",
+                "comprometer"
               ]
             },
             "description": "Compromete 30 unidades de Alimentos de la ONG para la convocatoria. Se compromete todo lo pedido o nada. Bloquea los recursos coincidentes (bloqueo pesimista) y registra una adjudicación por cada recurso afectado."
@@ -439,17 +439,17 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tipo_recurso\": \"Alimentos\",\n  \"nombre_ong\": \"{{ongNombre}}\",\n  \"cantidad\": 500,\n  \"id_convocatoria\": {{idConvocatoriaRechazada}}\n}"
+              "raw": "{\n  \"tipo_recurso\": \"Alimentos\",\n  \"codigo_ong\": \"{{ongCodigo}}\",\n  \"cantidad\": 500,\n  \"id_convocatoria\": {{idConvocatoriaRechazada}}\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/validar/coincidencias",
+              "raw": "{{baseUrl}}/api/recursos/comprometer",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "validar",
-                "coincidencias"
+                "recursos",
+                "comprometer"
               ]
             },
             "description": "Pide 500 unidades cuando solo hay 70 disponibles. El compromiso es todo o nada: la API rechaza el pedido con 409 y un mensaje, y no bloquea ninguna unidad."
@@ -483,17 +483,17 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"tipo_recurso\": \"Alimentos\",\n  \"nombre_ong\": \"{{ongNombre}}\",\n  \"cantidad\": 10\n}"
+              "raw": "{\n  \"tipo_recurso\": \"Alimentos\",\n  \"codigo_ong\": \"{{ongCodigo}}\",\n  \"cantidad\": 10\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/validar/coincidencias",
+              "raw": "{{baseUrl}}/api/recursos/comprometer",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "validar",
-                "coincidencias"
+                "recursos",
+                "comprometer"
               ]
             },
             "description": "El id de la convocatoria es obligatorio: sin él no se podría liberar después. Responde 400."
