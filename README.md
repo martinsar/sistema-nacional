@@ -216,6 +216,28 @@ Cuando hay recursos que no se pudieron liberar, el mensaje es: `Recursos liberad
 | 400 | Falta `id_convocatoria` |
 | 404 | La convocatoria no tiene adjudicaciones pendientes (nunca comprometió recursos, o ya se liberó) |
 
+### Catálogo de tipos de recurso
+
+El Sistema Nacional define un **catálogo único de tipos de recurso** con código estable; la app local debe usar los mismos códigos. `GET /api/tipos-recurso` (con JWT) devuelve `[{"codigo":"ALIMENTOS","nombre":"Raciones de alimento"}, ...]`.
+
+| Código | Nombre |
+|---|---|
+| `ALIMENTOS` | Raciones de alimento |
+| `AGUA` | Agua potable |
+| `MEDICAMENTOS` | Medicamentos |
+| `PARAMEDICOS` | Paramédicos |
+| `BOMBEROS` | Bomberos |
+| `RESCATISTAS` | Rescatistas |
+| `FRAZADAS` | Frazadas |
+| `CARPAS` | Carpas |
+| `GENERADORES` | Generadores eléctricos |
+| `VOLUNTARIOS` | Voluntarios |
+| `ROPA_ABRIGO` | Ropa de abrigo |
+
+- Al crear o modificar ONGs (`tiposRecursos`) y recursos (`tipo`) se acepta el código, el nombre o el alias heredado `Alimentos` (sin distinguir mayúsculas, tildes ni espacios sobrantes), pero se guarda y se devuelve siempre el **código**. Un tipo fuera del catálogo responde `400` con `Tipo de recurso desconocido: X`.
+- **Regla de validación (binaria):** `habilitado_flag` es `true` si el `recurso_tipo` de la oferta, normalizado a código, está en el arreglo de tipos de la ONG (identificada por `codigo_ong`); si no, `false`. Los datos viejos guardados por nombre (por ejemplo `Alimentos`) se siguen reconociendo.
+- **Semilla de prueba (opt-in):** con la variable de entorno `SEED_DATOS=true` (property `app.seed.enabled`, por defecto `false`) se cargan al iniciar las ONGs `ONG-CARITAS`, `ONG-CRUZ-ROJA`, `ONG-BOMBEROS-LP`, `ONG-MEDICOS-MUNDO` y `ONG-DEFENSA-CIVIL` con su especialización y 1000 unidades de stock por tipo. Es idempotente: una ONG cuyo `codigo_ong` ya existe no se modifica. En Render no se activa salvo que se defina `SEED_DATOS`.
+
 ## 4. Flujo típico
 
 1. Login y obtención del token.

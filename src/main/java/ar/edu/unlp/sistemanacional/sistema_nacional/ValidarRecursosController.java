@@ -39,11 +39,12 @@ public class ValidarRecursosController {
 
     @PostMapping({"/ofertas/validar", "/validar/recursos"})
     @Operation(summary = "Validar ofertas",
-            description = "Requiere JWT. Envía una lista JSON a POST /api/ofertas/validar (alias compatible: /api/validar/recursos). Cada elemento lleva codigo_ong, recurso_tipo y recurso_cantidad; ejemplo: [{\"codigo_ong\":\"APP-ONG-123\",\"recurso_tipo\":\"Alimentos\",\"recurso_cantidad\":5}]. La respuesta devuelve la misma lista con habilitado_flag=true si la ONG está habilitada para ese tipo, o false si no. No modifica el stock. organizacion_nombre se acepta temporalmente para clientes anteriores; prioriza codigo_ong.")
+            description = "Requiere JWT. Envía una lista JSON a POST /api/ofertas/validar (alias compatible: /api/validar/recursos). Cada elemento lleva codigo_ong, recurso_tipo y recurso_cantidad; ejemplo: [{\"codigo_ong\":\"APP-ONG-123\",\"recurso_tipo\":\"ALIMENTOS\",\"recurso_cantidad\":5}]. La respuesta devuelve la misma lista con habilitado_flag=true si el tipo de recurso (código del catálogo de GET /api/tipos-recurso) está en la especialización de la ONG, o false si no. La validación es binaria. No modifica el stock. organizacion_nombre se acepta temporalmente para clientes anteriores; prioriza codigo_ong.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Ofertas procesadas; cada una incluye habilitado_flag.",
                     content = @Content(array = @ArraySchema(schema = @Schema(implementation = Oferta.class)))),
-            @ApiResponse(responseCode = "400", description = "El cuerpo está ausente o no contiene una lista JSON válida."),
+            @ApiResponse(responseCode = "400", description = "El cuerpo está ausente o no contiene una lista JSON válida.",
+                    content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Falta el token JWT o no es válido.")
     })
     public ResponseEntity<List<Oferta>> validarRecursos(
@@ -55,11 +56,11 @@ public class ValidarRecursosController {
 
     @PostMapping({"/recursos/comprometer", "/validar/coincidencias"})
     @Operation(summary = "Comprometer recursos",
-            description = "Requiere JWT. Envía POST /api/recursos/comprometer (alias compatible: /api/validar/coincidencias) con JSON que incluya tipo_recurso, codigo_ong, cantidad positiva e id_convocatoria. Ejemplo: {\"tipo_recurso\":\"Alimentos\",\"codigo_ong\":\"APP-ONG-123\",\"cantidad\":5,\"id_convocatoria\":10}. Busca recursos disponibles de esa ONG y tipo, los bloquea y registra adjudicaciones para liberarlos luego. La operación es atómica: compromete todo lo pedido o nada. nombre_ong se acepta temporalmente para compatibilidad; prioriza codigo_ong.")
+            description = "Requiere JWT. Envía POST /api/recursos/comprometer (alias compatible: /api/validar/coincidencias) con JSON que incluya tipo_recurso, codigo_ong, cantidad positiva e id_convocatoria. Ejemplo: {\"tipo_recurso\":\"ALIMENTOS\",\"codigo_ong\":\"APP-ONG-123\",\"cantidad\":5,\"id_convocatoria\":10}. Busca recursos disponibles de esa ONG y tipo, los bloquea y registra adjudicaciones para liberarlos luego. La operación es atómica: compromete todo lo pedido o nada. nombre_ong se acepta temporalmente para compatibilidad; prioriza codigo_ong.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "La cantidad solicitada fue comprometida.",
                     content = @Content(schema = @Schema(implementation = DescontarRecursosService.DescuentoResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Falta el tipo, codigo_ong (o nombre_ong legado), id de convocatoria o una cantidad mayor a cero.",
+            @ApiResponse(responseCode = "400", description = "Falta el tipo, codigo_ong (o nombre_ong legado), id de convocatoria o una cantidad mayor a cero, o el tipo de recurso no pertenece al catálogo (Tipo de recurso desconocido: X).",
                     content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "Falta el token JWT o no es válido."),
             @ApiResponse(responseCode = "404", description = "La ONG no tiene recursos del tipo solicitado.",
@@ -70,6 +71,27 @@ public class ValidarRecursosController {
     public ResponseEntity<DescontarRecursosService.DescuentoResponse> descontarRecursos(
             @RequestBody DescontarRecursosService.SolicitudDescuento solicitud) {
         return ResponseEntity.ok(descontarRecursosService.descontar(solicitud));
+    }
+
+    @PostMapping("/convocatorias/{id}/recursos/comprometer")
+    @Operation(summary = "Comprometer los recursos de una convocatoria",
+            description = "Requiere JWT. Bloquea en una sola operación todos los recursos elegidos para la convocatoria. Body: lista de {tipo_recurso, codigo_ong, cantidad}. Ejemplo: POST /api/convocatorias/10/recursos/comprometer con [{\"tipo_recurso\":\"FRAZADAS\",\"codigo_ong\":\"ONG-CARITAS\",\"cantidad\":200},{\"tipo_recurso\":\"PARAMEDICOS\",\"codigo_ong\":\"ONG-CRUZ-ROJA\",\"cantidad\":10}]. Es transaccional: si algún recurso no se puede bloquear, no se bloquea ninguno.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Se comprometieron todos los recursos.",
+                    content = @Content(schema = @Schema(implementation = DescontarRecursosService.CompromisoConvocatoriaResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Lista vacía, datos faltantes o tipo de recurso fuera del catálogo.",
+                    content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "Falta el token JWT o no es válido."),
+            @ApiResponse(responseCode = "404", description = "Alguna ONG no tiene recursos del tipo pedido; no se bloquea nada.",
+                    content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "La disponibilidad de algún recurso no alcanza, o la convocatoria ya tiene recursos comprometidos; no se bloquea nada.",
+                    content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class)))
+    })
+    public ResponseEntity<DescontarRecursosService.CompromisoConvocatoriaResponse> comprometerConvocatoria(
+            @Parameter(description = "Identificador de la convocatoria", required = true)
+            @PathVariable Long id,
+            @RequestBody List<DescontarRecursosService.ItemCompromiso> recursos) {
+        return ResponseEntity.ok(descontarRecursosService.comprometerConvocatoria(id, recursos));
     }
 
     @PostMapping("/convocatorias/{id}/recursos/liberar")

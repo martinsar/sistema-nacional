@@ -27,7 +27,8 @@ import org.springframework.web.server.ResponseStatusException;
         "spring.datasource.url=jdbc:h2:mem:ong-recurso;DB_CLOSE_DELAY=-1",
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
+        "spring.jpa.hibernate.ddl-auto=create-drop",
+        "app.seed.enabled=true"
 })
 class OngRecursoServiceTests {
 
@@ -48,6 +49,15 @@ class OngRecursoServiceTests {
 
     @Autowired
     private AdjudicacionRepository adjudicacionRepository;
+
+    @Autowired
+    private OngRepository ongRepository;
+
+    @Autowired
+    private RecursoRepository recursoRepository;
+
+    @Autowired
+    private SemillaDatosRunner semillaDatosRunner;
 
     // Cada test usa su propia convocatoria para no mezclar adjudicaciones
     private static final AtomicLong SIGUIENTE_CONVOCATORIA = new AtomicLong(1000);
@@ -96,6 +106,68 @@ class OngRecursoServiceTests {
         assertTrue(error.getReason().contains("No se comprometió ninguna unidad"));
         assertEquals(3, recursoService.findById(recurso.id()).cantidadBloqueada());
         assertEquals(0, adjudicacionRepository.findByConvocatoriaIdOrderByIdAsc(convocatoria).size());
+    }
+
+    // ---------- Compromiso de toda la convocatoria (transaccional) ----------
+
+    private static DescontarRecursosService.ItemCompromiso item(String codigoOng, String tipo, int cantidad) {
+        return new DescontarRecursosService.ItemCompromiso(tipo, codigoOng, cantidad);
+    }
+
+    @Test
+    void commitsEveryChosenResourceOfTheConvocatoriaInOneOperation() {
+        long convocatoria = SIGUIENTE_CONVOCATORIA.incrementAndGet();
+        var ongA = ongService.create(new OngService.OngRequest("ONG " + UUID.randomUUID(), List.of("Alimentos")));
+        var ongB = ongService.create(new OngService.OngRequest("ONG " + UUID.randomUUID(), List.of("Medicamentos")));
+        var recursoA = recursoService.create(new RecursoService.RecursoRequest("Alimentos", 10, 0, ongA.id()));
+        var recursoB = recursoService.create(new RecursoService.RecursoRequest("Medicamentos", 8, 0, ongB.id()));
+
+        var resultado = descontarRecursosService.comprometerConvocatoria(convocatoria, List.of(
+                item(ongA.codigoOng(), "ALIMENTOS", 4), item(ongB.codigoOng(), "MEDICAMENTOS", 8),
+                item(ongA.codigoOng(), "alimentos", 2)));
+
+        assertEquals(14, resultado.cantidadComprometida());
+        assertEquals(2, resultado.compromisos().size());
+        assertEquals(6, recursoService.findById(recursoA.id()).cantidadBloqueada());
+        assertEquals(8, recursoService.findById(recursoB.id()).cantidadBloqueada());
+        assertEquals(2, adjudicacionRepository.findByConvocatoriaIdOrderByIdAsc(convocatoria).size());
+    }
+
+    @Test
+    void blocksNothingWhenOneOfTheChosenResourcesCannotBeCommitted() {
+        long convocatoria = SIGUIENTE_CONVOCATORIA.incrementAndGet();
+        var ongA = ongService.create(new OngService.OngRequest("ONG " + UUID.randomUUID(), List.of("Alimentos")));
+        var ongB = ongService.create(new OngService.OngRequest("ONG " + UUID.randomUUID(), List.of("Medicamentos")));
+        var recursoA = recursoService.create(new RecursoService.RecursoRequest("Alimentos", 10, 0, ongA.id()));
+        var recursoB = recursoService.create(new RecursoService.RecursoRequest("Medicamentos", 3, 0, ongB.id()));
+
+        var error = assertThrows(ResponseStatusException.class,
+                () -> descontarRecursosService.comprometerConvocatoria(convocatoria, List.of(
+                        item(ongA.codigoOng(), "ALIMENTOS", 5), item(ongB.codigoOng(), "MEDICAMENTOS", 4))));
+
+        assertEquals(HttpStatus.CONFLICT, error.getStatusCode());
+        assertTrue(error.getReason().contains("No se comprometió ningún recurso de la convocatoria"));
+        assertEquals(0, recursoService.findById(recursoA.id()).cantidadBloqueada());
+        assertEquals(0, recursoService.findById(recursoB.id()).cantidadBloqueada());
+        assertEquals(0, adjudicacionRepository.findByConvocatoriaIdOrderByIdAsc(convocatoria).size());
+    }
+
+    @Test
+    void rejectsCommittingTheSameConvocatoriaTwiceAndEmptyRequests() {
+        long convocatoria = SIGUIENTE_CONVOCATORIA.incrementAndGet();
+        var ong = ongService.create(new OngService.OngRequest("ONG " + UUID.randomUUID(), List.of("Alimentos")));
+        var recurso = recursoService.create(new RecursoService.RecursoRequest("Alimentos", 10, 0, ong.id()));
+        descontarRecursosService.comprometerConvocatoria(convocatoria, List.of(item(ong.codigoOng(), "ALIMENTOS", 3)));
+
+        var repetido = assertThrows(ResponseStatusException.class,
+                () -> descontarRecursosService.comprometerConvocatoria(convocatoria,
+                        List.of(item(ong.codigoOng(), "ALIMENTOS", 3))));
+        assertEquals(HttpStatus.CONFLICT, repetido.getStatusCode());
+        assertEquals(3, recursoService.findById(recurso.id()).cantidadBloqueada());
+
+        var vacio = assertThrows(ResponseStatusException.class,
+                () -> descontarRecursosService.comprometerConvocatoria(SIGUIENTE_CONVOCATORIA.incrementAndGet(), List.of()));
+        assertEquals(HttpStatus.BAD_REQUEST, vacio.getStatusCode());
     }
 
     @Test
@@ -351,12 +423,115 @@ class OngRecursoServiceTests {
         assertEquals(codigoCompartido, ongService.findById(ong.id()).codigoOng());
     }
 
+
+    // ---------- Catálogo de tipos de recurso ----------
+
+    @Test
+    void normalizesCodesNamesAndAliasesIgnoringCaseAccentsAndSpaces() {
+        assertEquals("ALIMENTOS", TipoRecurso.normalizar("Alimentos").orElseThrow());
+        assertEquals("ALIMENTOS", TipoRecurso.normalizar("  raciones   de ALIMENTO ").orElseThrow());
+        assertEquals("PARAMEDICOS", TipoRecurso.normalizar("paramedicos").orElseThrow());
+        assertEquals("PARAMEDICOS", TipoRecurso.normalizar("Paramédicos").orElseThrow());
+        assertEquals("ROPA_ABRIGO", TipoRecurso.normalizar("ropa de abrigo").orElseThrow());
+        assertEquals("ROPA_ABRIGO", TipoRecurso.normalizar("ROPA_ABRIGO").orElseThrow());
+        assertEquals("GENERADORES", TipoRecurso.normalizar("Generadores eléctricos").orElseThrow());
+        assertTrue(TipoRecurso.normalizar("Maquinaria").isEmpty());
+        assertTrue(TipoRecurso.normalizar("  ").isEmpty());
+        assertTrue(TipoRecurso.normalizar(null).isEmpty());
+        assertEquals(11, TipoRecurso.values().length);
+    }
+
+    @Test
+    void storesCanonicalCodesAndRejectsUnknownTypesWith400() {
+        var ong = ongService.create(new OngService.OngRequest("ONG " + UUID.randomUUID(),
+                List.of("Alimentos", "agua potable", "ALIMENTOS")));
+        assertEquals(List.of("ALIMENTOS", "AGUA"), ong.tiposRecursos());
+
+        var recurso = recursoService.create(new RecursoService.RecursoRequest("Paramédicos", 5, 0, ong.id()));
+        assertEquals("PARAMEDICOS", recurso.tipo());
+
+        var errorOng = assertThrows(ResponseStatusException.class, () -> ongService.create(
+                new OngService.OngRequest("ONG " + UUID.randomUUID(), List.of("ALIMENTOS", "Maquinaria"))));
+        assertEquals(HttpStatus.BAD_REQUEST, errorOng.getStatusCode());
+        assertEquals("Tipo de recurso desconocido: Maquinaria", errorOng.getReason());
+
+        var errorActualizar = assertThrows(ResponseStatusException.class, () -> ongService.update(ong.id(),
+                new OngService.OngRequest("ONG", List.of("Inexistente"))));
+        assertEquals(HttpStatus.BAD_REQUEST, errorActualizar.getStatusCode());
+
+        var errorRecurso = assertThrows(ResponseStatusException.class,
+                () -> recursoService.create(new RecursoService.RecursoRequest("Maquinaria", 5, 0, ong.id())));
+        assertEquals(HttpStatus.BAD_REQUEST, errorRecurso.getStatusCode());
+        assertEquals("Tipo de recurso desconocido: Maquinaria", errorRecurso.getReason());
+
+        var errorActualizarRecurso = assertThrows(ResponseStatusException.class, () -> recursoService.update(
+                recurso.id(), new RecursoService.RecursoRequest("Maquinaria", 5, 0, ong.id())));
+        assertEquals(HttpStatus.BAD_REQUEST, errorActualizarRecurso.getStatusCode());
+    }
+
+    @Test
+    void validatesBinaryByCodeAgainstOngSpecialization() {
+        String ongNombre = "ONG " + UUID.randomUUID();
+        ongService.create(new OngService.OngRequest(ongNombre, List.of("AGUA", "CARPAS")));
+
+        var resultado = validarRecursosService.validarOfertas(List.of(
+                new Oferta(ongNombre, "AGUA", 1, null),
+                new Oferta(ongNombre, "agua potable", 1, null),
+                new Oferta(ongNombre, "Carpas", 1, null),
+                new Oferta(ongNombre, "BOMBEROS", 1, null),
+                new Oferta(ongNombre, "Desconocido", 1, null),
+                new Oferta(ongNombre, null, 1, null)));
+
+        assertEquals(List.of(true, true, true, false, false, false),
+                resultado.stream().map(Oferta::getHabilitado_flag).toList());
+    }
+
+    @Test
+    void stillWorksWithLegacyDataStoredByName() {
+        String codigo = "LEGADO-" + UUID.randomUUID();
+        Ong ong = ongRepository.saveAndFlush(new Ong(codigo, "ONG vieja " + UUID.randomUUID(),
+                new ArrayList<>(List.of("Alimentos", " Medicamentos "))));
+        Recurso recurso = recursoRepository.saveAndFlush(new Recurso("Alimentos", 10, 0, ong));
+
+        Oferta oferta = new Oferta("x", "ALIMENTOS", 1, null);
+        oferta.setCodigo_ong(codigo);
+        Oferta otra = new Oferta("x", "medicamentos", 1, null);
+        otra.setCodigo_ong(codigo);
+        Oferta noHabilitada = new Oferta("x", "AGUA", 1, null);
+        noHabilitada.setCodigo_ong(codigo);
+        assertEquals(List.of(true, true, false), validarRecursosService.validarOfertas(List.of(oferta, otra, noHabilitada))
+                .stream().map(Oferta::getHabilitado_flag).toList());
+
+        long convocatoria = SIGUIENTE_CONVOCATORIA.incrementAndGet();
+        var compromiso = descontarRecursosService.descontar(new DescontarRecursosService.SolicitudDescuento(
+                "ALIMENTOS", codigo, null, 4, convocatoria));
+        assertEquals(4, compromiso.cantidadComprometida());
+        assertEquals(4, recursoService.findById(recurso.getId()).cantidadBloqueada());
+
+        liberarRecursosService.liberar(new LiberarRecursosService.SolicitudLiberacion(convocatoria));
+        assertEquals(0, recursoService.findById(recurso.getId()).cantidadBloqueada());
+    }
+
+    @Test
+    void seedIsIdempotentAndLoadsStockPerSpecialization() {
+        semillaDatosRunner.sembrar();
+        assertEquals(0, semillaDatosRunner.sembrar());
+
+        var caritas = ongService.findByCodigoOng("ONG-CARITAS");
+        assertEquals(List.of("ALIMENTOS", "AGUA", "FRAZADAS", "ROPA_ABRIGO", "CARPAS"), caritas.tiposRecursos());
+        var recursos = recursoService.findAll().stream().filter(r -> "ONG-CARITAS".equals(r.codigoOng())).toList();
+        assertEquals(5, recursos.size());
+        assertTrue(recursos.stream().allMatch(r -> r.cantidadTotal() == 1000 && r.cantidadBloqueada() == 0));
+        assertEquals(5, ongRepository.findAll().stream().filter(o -> o.getCodigoOng().matches(
+                "ONG-(CARITAS|CRUZ-ROJA|BOMBEROS-LP|MEDICOS-MUNDO|DEFENSA-CIVIL)")).count());
+    }
+
     // ---------- ABM ----------
 
     @Test
     void createsReadsUpdatesAndDeletesOngsAndResources() {
         String suffix = UUID.randomUUID().toString();
-        var ong = ongService.create(new OngService.OngRequest("ONG " + suffix, List.of("Asistencia")));
+        var ong = ongService.create(new OngService.OngRequest("ONG " + suffix, List.of("AGUA")));
 
         var recurso = recursoService.create(new RecursoService.RecursoRequest("Alimentos", 20, 3, ong.id()));
         assertEquals(ong.id(), recurso.ongId());
@@ -366,14 +541,14 @@ class OngRecursoServiceTests {
 
         var updatedRecurso = recursoService.update(recurso.id(),
                 new RecursoService.RecursoRequest("Medicamentos", 25, 5, ong.id()));
-        assertEquals("Medicamentos", updatedRecurso.tipo());
+        assertEquals("MEDICAMENTOS", updatedRecurso.tipo());
         assertEquals(25, updatedRecurso.cantidadTotal());
 
         assertEquals(HttpStatus.CONFLICT,
                 assertThrows(ResponseStatusException.class, () -> ongService.delete(ong.id())).getStatusCode());
 
-        var updatedOng = ongService.update(ong.id(), new OngService.OngRequest("ONG actualizada " + suffix, List.of("Salud")));
-        assertEquals(List.of("Salud"), updatedOng.tiposRecursos());
+        var updatedOng = ongService.update(ong.id(), new OngService.OngRequest("ONG actualizada " + suffix, List.of("CARPAS")));
+        assertEquals(List.of("CARPAS"), updatedOng.tiposRecursos());
         assertEquals(updatedOng.id(), ongService.findById(ong.id()).id());
 
         recursoService.delete(recurso.id());
@@ -384,7 +559,7 @@ class OngRecursoServiceTests {
 
     @Test
     void rejectsInvalidResourceQuantities() {
-        var ong = ongService.create(new OngService.OngRequest("ONG " + UUID.randomUUID(), List.of("Asistencia")));
+        var ong = ongService.create(new OngService.OngRequest("ONG " + UUID.randomUUID(), List.of("AGUA")));
         var error = assertThrows(ResponseStatusException.class,
                 () -> recursoService.create(new RecursoService.RecursoRequest("Alimentos", 2, 3, ong.id())));
         assertEquals(HttpStatus.BAD_REQUEST, error.getStatusCode());

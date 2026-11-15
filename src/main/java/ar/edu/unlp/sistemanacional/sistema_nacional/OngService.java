@@ -44,7 +44,7 @@ public class OngService {
         if (codigoOng != null && ongRepository.existsByCodigoOng(codigoOng)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe una ONG con ese codigo_ong");
         }
-        Ong ong = new Ong(codigoOng, request.nombre().trim(), request.tiposRecursos());
+        Ong ong = new Ong(codigoOng, request.nombre().trim(), normalizarTipos(request.tiposRecursos()));
         try {
             return toResponse(ongRepository.saveAndFlush(ong));
         } catch (DataIntegrityViolationException e) {
@@ -68,10 +68,7 @@ public class OngService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "El codigo_ong no puede modificarse");
         }
         ong.setNombre(request.nombre().trim());
-        List<String> nuevosTipos = request.tiposRecursos() != null 
-            ? new ArrayList<>(request.tiposRecursos()) 
-            : new ArrayList<>();
-        ong.setTipo(nuevosTipos);
+        ong.setTipo(normalizarTipos(request.tiposRecursos()));
         return toResponse(ongRepository.save(ong));
     }
 
@@ -112,6 +109,11 @@ public class OngService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Nombre, al menos un tipo de recurso y un codigo_ong válido si se especifica son obligatorios");
         }
+    }
+
+    // [Entrega final] Se normaliza cada tipo contra el catálogo y se guarda el código canónico sin repetidos
+    private static List<String> normalizarTipos(List<String> tipos) {
+        return new ArrayList<>(tipos.stream().map(TipoRecurso::exigir).distinct().toList());
     }
 
     private static OngResponse toResponse(Ong ong) {

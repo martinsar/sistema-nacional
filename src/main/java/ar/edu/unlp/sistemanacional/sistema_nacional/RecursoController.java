@@ -57,11 +57,11 @@ public class RecursoController {
 	}
 
 	@PostMapping
-	@Operation(summary = "Crear recurso", description = "Registra stock y lo asocia a una ONG existente. La solicitud debe incluir tipo, cantidadTotal, cantidadBloqueada y codigo_ong. Ejemplo: {\"tipo\":\"Alimentos\",\"cantidadTotal\":100,\"cantidadBloqueada\":0,\"codigo_ong\":\"APP-ONG-123\"}. codigo_ong es el identificador estable de la ONG; cantidadBloqueada no puede superar cantidadTotal. ongId numérico se mantiene por compatibilidad. Requiere autenticación JWT.")
+	@Operation(summary = "Crear recurso", description = "Registra stock y lo asocia a una ONG existente. La solicitud debe incluir tipo, cantidadTotal, cantidadBloqueada y codigo_ong. Ejemplo: {\"tipo\":\"ALIMENTOS\",\"cantidadTotal\":100,\"cantidadBloqueada\":0,\"codigo_ong\":\"APP-ONG-123\"}. codigo_ong es el identificador estable de la ONG; cantidadBloqueada no puede superar cantidadTotal. ongId numérico se mantiene por compatibilidad. Requiere autenticación JWT.")
 	@ApiResponses({
 			@ApiResponse(responseCode = "201", description = "Recurso creado.",
 					content = @Content(schema = @Schema(implementation = RecursoService.RecursoResponse.class))),
-			@ApiResponse(responseCode = "400", description = "Faltan datos, las cantidades son inválidas o falta el id de la ONG.",
+			@ApiResponse(responseCode = "400", description = "Faltan datos, las cantidades son inválidas, falta el id de la ONG o el tipo no pertenece al catálogo (Tipo de recurso desconocido: X).",
 					content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
 			@ApiResponse(responseCode = "401", description = "Falta el token JWT o no es válido."),
 			@ApiResponse(responseCode = "404", description = "No existe la ONG indicada.",
@@ -77,7 +77,7 @@ public class RecursoController {
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "Recurso actualizado.",
 					content = @Content(schema = @Schema(implementation = RecursoService.RecursoResponse.class))),
-			@ApiResponse(responseCode = "400", description = "Faltan datos, las cantidades son inválidas o falta el id de la ONG.",
+			@ApiResponse(responseCode = "400", description = "Faltan datos, las cantidades son inválidas, falta el id de la ONG o el tipo no pertenece al catálogo (Tipo de recurso desconocido: X).",
 					content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
 			@ApiResponse(responseCode = "401", description = "Falta el token JWT o no es válido."),
 			@ApiResponse(responseCode = "404", description = "No existe el recurso o la ONG indicada.",

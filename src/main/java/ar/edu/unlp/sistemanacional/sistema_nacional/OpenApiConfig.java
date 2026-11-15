@@ -32,4 +32,30 @@ public class OpenApiConfig {
                             new ApiResponse().description("Error interno inesperado; la solicitud no pudo completarse."))));
         };
     }
+
+    // [Entrega final] Se completa un ejemplo de ErrorResponse en cada respuesta de error documentada
+    @Bean
+    OpenApiCustomizer ejemplosDeError() {
+        return openApi -> {
+            if (openApi.getPaths() == null) {
+                return;
+            }
+
+            openApi.getPaths().values().forEach(pathItem -> pathItem.readOperations().forEach(operation ->
+                    operation.getResponses().forEach((codigo, respuesta) -> {
+                        boolean esError = codigo.equals("400") || codigo.equals("404") || codigo.equals("409");
+                        if (!esError || respuesta.getContent() == null) {
+                            return;
+                        }
+                        respuesta.getContent().values().forEach(media -> {
+                            if (media.getExample() == null && media.getExamples() == null) {
+                                var ejemplo = new java.util.LinkedHashMap<String, Object>();
+                                ejemplo.put("codigo", Integer.parseInt(codigo));
+                                ejemplo.put("mensaje", respuesta.getDescription());
+                                media.setExample(ejemplo);
+                            }
+                        });
+                    })));
+        };
+    }
 }

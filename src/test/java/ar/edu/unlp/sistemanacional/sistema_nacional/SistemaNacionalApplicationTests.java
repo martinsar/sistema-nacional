@@ -198,6 +198,32 @@ class SistemaNacionalApplicationTests {
 		assertTrue(commitmentResponse.body().contains("\"codigo_ong\":\"" + ongCode + "\""));
 	}
 
+	@Test
+	void tiposRecursoCatalogIsProtectedAndUnknownTypesAreRejected() throws Exception {
+		var sinToken = httpClient.send(HttpRequest.newBuilder(uri("/api/tipos-recurso")).GET().build(),
+				HttpResponse.BodyHandlers.ofString());
+		assertEquals(401, sinToken.statusCode());
+
+		String username = "catalogo-" + UUID.randomUUID();
+		String credentials = "{\"username\":\"" + username + "\",\"password\":\"correct-password\"}";
+		assertEquals(201, postJson("/api/auth/register", credentials).statusCode());
+		var login = postJson("/api/auth/login", credentials);
+		var tokenMatcher = Pattern.compile("\"accessToken\"\s*:\s*\"([^\"]+)\"").matcher(login.body());
+		assertTrue(tokenMatcher.find());
+		String accessToken = tokenMatcher.group(1);
+
+		var catalogo = httpClient.send(HttpRequest.newBuilder(uri("/api/tipos-recurso"))
+				.header("Authorization", "Bearer " + accessToken).GET().build(), HttpResponse.BodyHandlers.ofString());
+		assertEquals(200, catalogo.statusCode());
+		assertTrue(catalogo.body().contains("{\"codigo\":\"ALIMENTOS\",\"nombre\":\"Raciones de alimento\"}"));
+		assertEquals(11, objectMapper.readTree(catalogo.body()).size());
+
+		var invalido = postJsonWithBearer("/api/ongs",
+				"{\"nombre\":\"ONG tipo inválido\",\"tiposRecursos\":[\"Maquinaria\"]}", accessToken);
+		assertEquals(400, invalido.statusCode());
+		assertTrue(invalido.body().contains("Tipo de recurso desconocido: Maquinaria"));
+	}
+
 	private HttpResponse<String> postJson(String path, String body) throws Exception {
 		var request = HttpRequest.newBuilder(uri(path))
 				.header("Content-Type", "application/json")

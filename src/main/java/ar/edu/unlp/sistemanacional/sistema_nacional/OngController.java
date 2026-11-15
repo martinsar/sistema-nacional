@@ -72,11 +72,11 @@ public class OngController {
 	}
 
 	@PostMapping
-	@Operation(summary = "Crear ONG", description = "Registra una ONG y devuelve sus identificadores. El cuerpo debe incluir nombre y al menos un tipo en tiposRecursos. Ejemplo: {\"nombre\":\"Caritas\",\"tiposRecursos\":[\"Alimentos\"],\"codigo_ong\":\"APP-ONG-123\"}. codigo_ong es opcional: si no se proporciona, esta API genera uno. Para integraciones posteriores se debe utilizar el codigo_ong devuelto; el id numérico es interno. Requiere autenticación JWT.")
+	@Operation(summary = "Crear ONG", description = "Registra una ONG y devuelve sus identificadores. El cuerpo debe incluir nombre y al menos un tipo en tiposRecursos. Ejemplo: {\"nombre\":\"Caritas\",\"tiposRecursos\":[\"ALIMENTOS\"],\"codigo_ong\":\"APP-ONG-123\"}. codigo_ong es opcional: si no se proporciona, esta API genera uno. Para integraciones posteriores se debe utilizar el codigo_ong devuelto; el id numérico es interno. Requiere autenticación JWT.")
 	@ApiResponses({
 			@ApiResponse(responseCode = "201", description = "ONG creada.",
 					content = @Content(schema = @Schema(implementation = OngService.OngResponse.class))),
-			@ApiResponse(responseCode = "400", description = "El nombre es obligatorio (máximo 150 caracteres), debe incluir al menos un tipo de recurso y el codigo_ong, si se envía, debe ser válido.",
+			@ApiResponse(responseCode = "400", description = "El nombre es obligatorio (máximo 150 caracteres), debe incluir al menos un tipo de recurso del catálogo (Tipo de recurso desconocido: X si no pertenece) y el codigo_ong, si se envía, debe ser válido.",
 					content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
 			@ApiResponse(responseCode = "401", description = "Falta el token JWT o no es válido."),
 			@ApiResponse(responseCode = "409", description = "El codigo_ong ya está asignado a otra ONG.",
@@ -91,7 +91,7 @@ public class OngController {
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "ONG actualizada.",
 					content = @Content(schema = @Schema(implementation = OngService.OngResponse.class))),
-			@ApiResponse(responseCode = "400", description = "El nombre es obligatorio (máximo 150 caracteres), debe incluir al menos un tipo de recurso y no se puede cambiar el codigo_ong.",
+			@ApiResponse(responseCode = "400", description = "El nombre es obligatorio (máximo 150 caracteres), debe incluir al menos un tipo de recurso del catálogo y no se puede cambiar el codigo_ong.",
 					content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
 			@ApiResponse(responseCode = "401", description = "Falta el token JWT o no es válido."),
 			@ApiResponse(responseCode = "404", description = "No existe una ONG con ese identificador.",
@@ -104,11 +104,11 @@ public class OngController {
 	}
 
 	@PutMapping("/codigo/{codigo_ong}")
-	@Operation(summary = "Actualizar ONG por código estable", description = "Reemplaza el nombre y los tipos de recursos habilitados. La ruta de ejemplo es PUT /api/ongs/codigo/APP-ONG-123; APP-ONG-123 debe corresponder al codigo_ong de la ONG. El cuerpo debe incluir nombre y tiposRecursos. Ejemplo: {\"nombre\":\"Caritas\",\"tiposRecursos\":[\"Alimentos\",\"Medicamentos\"]}. codigo_ong es estable y no se modifica. Requiere autenticación JWT.")
+	@Operation(summary = "Actualizar ONG por código estable", description = "Reemplaza el nombre y los tipos de recursos habilitados. La ruta de ejemplo es PUT /api/ongs/codigo/APP-ONG-123; APP-ONG-123 debe corresponder al codigo_ong de la ONG. El cuerpo debe incluir nombre y tiposRecursos. Ejemplo: {\"nombre\":\"Caritas\",\"tiposRecursos\":[\"ALIMENTOS\",\"MEDICAMENTOS\"]}. codigo_ong es estable y no se modifica. Requiere autenticación JWT.")
 	@ApiResponses({
 			@ApiResponse(responseCode = "200", description = "ONG actualizada.",
 					content = @Content(schema = @Schema(implementation = OngService.OngResponse.class))),
-			@ApiResponse(responseCode = "400", description = "Los datos son inválidos o se intentó cambiar codigo_ong.",
+			@ApiResponse(responseCode = "400", description = "Los datos son inválidos, algún tipo de recurso no pertenece al catálogo o se intentó cambiar codigo_ong.",
 					content = @Content(schema = @Schema(implementation = ApiExceptionHandler.ErrorResponse.class))),
 			@ApiResponse(responseCode = "401", description = "Falta el token JWT o no es válido."),
 			@ApiResponse(responseCode = "404", description = "No existe una ONG con ese codigo_ong.",

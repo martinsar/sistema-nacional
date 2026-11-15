@@ -20,10 +20,13 @@ public class ValidarRecursosService {
             boolean habilitado = false;
             Optional<Ong> ongO = buscarOng(oferta);
 
-            if (ongO.isPresent() && oferta.getRecurso_tipo() != null) {
+            // [Entrega final] Se compara por código canónico, también con datos viejos guardados por nombre
+            Optional<String> tipoOferta = TipoRecurso.normalizar(oferta.getRecurso_tipo());
+            if (ongO.isPresent() && tipoOferta.isPresent()) {
                 List<String> tiposDisponibles = ongO.get().getTipo();
                 habilitado = tiposDisponibles != null && tiposDisponibles.stream()
-                        .anyMatch(tipo -> tipo.trim().equalsIgnoreCase(oferta.getRecurso_tipo().trim()));
+                        .map(TipoRecurso::normalizar)
+                        .anyMatch(tipo -> tipo.equals(tipoOferta));
             }
 
             oferta.setHabilitado_flag(habilitado);

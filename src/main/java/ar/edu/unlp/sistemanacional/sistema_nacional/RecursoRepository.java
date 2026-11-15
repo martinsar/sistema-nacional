@@ -17,5 +17,11 @@ public interface RecursoRepository extends JpaRepository<Recurso, Long> {
 	List<Recurso> findByTipoIgnoreCaseAndOng_CodigoOngOrderByIdAsc(String tipo, String codigoOng);
 
 	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	List<Recurso> findByOng_NombreIgnoreCaseOrderByIdAsc(String nombre);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
+	List<Recurso> findByOng_CodigoOngOrderByIdAsc(String codigoOng);
+
+	@Lock(LockModeType.PESSIMISTIC_WRITE)
 	List<Recurso> findAllByIdInOrderByIdAsc(Collection<Long> ids);
 }

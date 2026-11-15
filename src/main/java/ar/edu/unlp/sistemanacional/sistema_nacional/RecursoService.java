@@ -37,7 +37,7 @@ public class RecursoService {
 	public RecursoResponse create(RecursoRequest request) {
 		validate(request);
 		Ong ong = getOng(request.codigoOng(), request.ongId());
-		Recurso recurso = new Recurso(request.tipo().trim(), request.cantidadTotal(),
+		Recurso recurso = new Recurso(TipoRecurso.exigir(request.tipo()), request.cantidadTotal(),
 				request.cantidadBloqueada(), ong);
 		return toResponse(recursoRepository.save(recurso));
 	}
@@ -45,7 +45,7 @@ public class RecursoService {
 	public RecursoResponse update(Long id, RecursoRequest request) {
 		validate(request);
 		Recurso recurso = getRecurso(id);
-		recurso.setTipo(request.tipo().trim());
+		recurso.setTipo(TipoRecurso.exigir(request.tipo()));
 		recurso.setCantidadTotal(request.cantidadTotal());
 		recurso.setCantidadBloqueada(request.cantidadBloqueada());
 		recurso.setOng(getOng(request.codigoOng(), request.ongId()));
